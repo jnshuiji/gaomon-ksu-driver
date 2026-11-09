@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>数位板驱动与光标服务</title>
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- 顶部应用栏 -->
+    <header class="topbar">
+      <div class="topbar-title-group">
+        <div class="brand-badge">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19l7-7 3 3-7 7-3-3z" />
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+            <path d="M2 2l7.586 7.586" />
+            <circle cx="11" cy="11" r="2" />
+          </svg>
+        </div>
+        <div>
+          <h1>数位板驱动与光标服务</h1>
+          <p class="subtitle">硬件状态看板与实时外观配置</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <span id="env-badge" class="pill pill-info">环境检测中</span>
+        <span id="unsaved-badge" class="pill pill-warn hidden">未保存修改</span>
+        <button id="btn-refresh" class="btn btn-tonal" type="button" title="刷新状态">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 16h5v5" />
+          </svg>
+          <span>刷新状态</span>
+        </button>
+        <button id="btn-save-top" class="btn btn-primary" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
+          </svg>
+          <span>保存配置</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 导航标签栏 -->
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" data-tab="tab-cursor" type="button">
+        <span>光标外观</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-power" type="button">
+        <span>硬件看板</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-advanced" type="button">
+        <span>配置与日志</span>
+      </button>
+    </nav>
+
+    <!-- 核心指标摘要条 -->
+    <section class="status-strip">
+      <div class="status-metric">
+        <span class="metric-dot" id="dot-daemon"></span>
+        <div class="metric-body">
+          <span class="metric-label">后台服务</span>
+          <strong class="metric-value" id="val-daemon-status">检测中</strong>
+        </div>
+      </div>
+      <div class="status-metric">
+        <span class="metric-dot" id="dot-usb"></span>
+        <div class="metric-body">
+          <span class="metric-label">数位板连接</span>
+          <strong class="metric-value" id="val-usb-status">检测中</strong>
+        </div>
+      </div>
+      <div class="status-metric">
+        <span class="metric-dot" id="dot-evdev"></span>
+        <div class="metric-body">
+          <span class="metric-label">输入设备节点</span>
+          <strong class="metric-value" id="val-evdev-status">检测中</strong>
+        </div>
+      </div>
+      <div class="status-metric">
+        <span class="metric-dot" id="dot-power"></span>
+        <div class="metric-body">
+          <span class="metric-label">供电锁定状态</span>
+          <strong class="metric-value" id="val-power-status">检测中</strong>
+        </div>
+      </div>
+    </section>
+
+    <main class="main-grid">
+      <!-- 标签页 1：光标外观 -->
+      <div id="tab-cursor" class="tab-panel active">
+        <div class="two-col-layout">
+          <div class="col-stack">
+            <!-- 实时预览与交互画板 -->
+            <section class="card preview-card">
+              <div class="card-header">
+                <div>
+                  <h2>光标实时预览</h2>
+                  <p class="card-desc">与底层渲染参数完全一致，支持在画板交互测试</p>
+                </div>
+                <div class="seg-group compact" id="preview-bg-group">
+                  <button type="button" class="seg-btn active" data-bg="dark">深色</button>
+                  <button type="button" class="seg-btn" data-bg="light">浅色</button>
+                  <button type="button" class="seg-btn" data-bg="grid">网格</button>
+                </div>
+              </div>
+
+              <div class="preview-stage-grid">
+                <!-- 悬浮态预览 -->
+                <div class="sprite-box">
+                  <div class="sprite-box-header">
+                    <span class="badge-tag">悬浮状态</span>
+                    <span class="sprite-dim" id="hover-bound-info"></span>
+                  </div>
+                  <div class="canvas-wrap bg-dark" id="wrap-hover">
+                    <canvas id="canvas-hover" width="256" height="256"></canvas>
+                  </div>
+                </div>
+
+                <!-- 接触态预览 -->
+                <div class="sprite-box">
+                  <div class="sprite-box-header">
+                    <span class="badge-tag badge-accent">接触状态</span>
+                    <span class="sprite-dim">落笔高亮</span>
+                  </div>
+                  <div class="canvas-wrap bg-dark" id="wrap-contact">
+                    <canvas id="canvas-contact" width="256" height="256"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 交互画板 -->
+              <div class="interactive-pad-wrap">
+                <div class="sprite-box-header">
+                  <span class="badge-tag">交互测试画板：滑动预览悬浮，按住预览落笔接触</span>
+                  <span class="sprite-dim" id="interactive-coords">就绪</span>
+                </div>
+                <div class="canvas-wrap interactive-wrap bg-dark" id="wrap-interactive">
+                  <canvas id="canvas-interactive" width="640" height="150"></canvas>
+                </div>
+              </div>
+            </section>
+
+            <!-- 运行控制 -->
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>运行控制</h2>
+                  <p class="card-desc">控制后台常驻服务与屏幕光标悬浮层的开启状态</p>
+                </div>
+              </div>
+
+              <div class="switch-list">
+                <label class="switch-row" for="cfg-daemon-enabled">
+                  <div class="switch-info">
+                    <strong>后台常驻服务</strong>
+                    <span>负责硬件事件分发、热插拔处理与供电锁定</span>
+                  </div>
+                  <input type="checkbox" id="cfg-daemon-enabled" class="toggle-input" checked />
+                  <span class="toggle-track"></span>
+                </label>
+
+                <label class="switch-row" for="cfg-overlay-enabled">
+                  <div class="switch-info">
+                    <strong>屏幕光标悬浮层</strong>
+                    <span>在手写笔悬停与书写时显示光标；关闭时仅隐藏光标</span>
+                  </div>
+                  <input type="checkbox" id="cfg-overlay-enabled" class="toggle-input" checked />
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <div class="col-stack">
+            <!-- 样式与几何尺寸 -->
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>光标样式与尺寸</h2>
+                  <p class="card-desc">调整光标图形组合与线条尺寸</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="group-label">光标形态</label>
+                <div class="style-selector" id="style-selector">
+                  <button type="button" class="style-option active" data-style="both">
+                    <span class="style-title">组合图形</span>
+                    <span class="style-sub">准星与圆环叠加</span>
+                  </button>
+                  <button type="button" class="style-option" data-style="crosshair">
+                    <span class="style-title">十字准星</span>
+                    <span class="style-sub">中心镂空准星</span>
+                  </button>
+                  <button type="button" class="style-option" data-style="circle">
+                    <span class="style-title">笔刷圆环</span>
+                    <span class="style-sub">外框圆环与中心点</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="sliders-grid">
+                <div class="slider-item" id="row-crosshair-size">
+                  <div class="slider-top">
+                    <label for="cfg-crosshair-size">准星臂长</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-crosshair-size" min="2" max="26" step="0.5" value="10.0" />
+                      <span>像素</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-crosshair-size" min="2" max="26" step="0.5" value="10.0" />
+                </div>
+
+                <div class="slider-item" id="row-crosshair-gap">
+                  <div class="slider-top">
+                    <label for="cfg-crosshair-gap">准星间距</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-crosshair-gap" min="0" max="14" step="0.5" value="3.5" />
+                      <span>像素</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-crosshair-gap" min="0" max="14" step="0.5" value="3.5" />
+                </div>
+
+                <div class="slider-item" id="row-crosshair-thickness">
+                  <div class="slider-top">
+                    <label for="cfg-crosshair-thickness">准星粗细</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-crosshair-thickness" min="0.5" max="6" step="0.25" value="1.5" />
+                      <span>像素</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-crosshair-thickness" min="0.5" max="6" step="0.25" value="1.5" />
+                </div>
+
+                <div class="slider-item" id="row-circle-radius">
+                  <div class="slider-top">
+                    <label for="cfg-circle-radius">圆环半径</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-circle-radius" min="2" max="27" step="0.5" value="12.0" />
+                      <span>像素</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-circle-radius" min="2" max="27" step="0.5" value="12.0" />
+                </div>
+
+                <div class="slider-item" id="row-circle-thickness">
+                  <div class="slider-top">
+                    <label for="cfg-circle-thickness">圆环粗细</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-circle-thickness" min="0.5" max="6" step="0.25" value="1.5" />
+                      <span>像素</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-circle-thickness" min="0.5" max="6" step="0.25" value="1.5" />
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-top">
+                    <label for="cfg-contact-dot-radius">接触点半径</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-contact-dot-radius" min="0.5" max="16" step="0.25" value="2.0" />
+                      <span>像素</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-contact-dot-radius" min="0.5" max="16" step="0.25" value="2.0" />
+                </div>
+              </div>
+            </section>
+
+            <!-- 颜色调色板 -->
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>色彩与透明度</h2>
+                  <p class="card-desc">配置光标主色、轮廓阴影与落笔接触高亮色</p>
+                </div>
+              </div>
+
+              <div class="preset-chips" id="palette-presets">
+                <button type="button" class="chip-btn" data-preset="default">青白预设</button>
+                <button type="button" class="chip-btn" data-preset="cyber">荧光绿预设</button>
+                <button type="button" class="chip-btn" data-preset="amber">暖金预设</button>
+                <button type="button" class="chip-btn" data-preset="crimson">绯红预设</button>
+                <button type="button" class="chip-btn" data-preset="stealth">灰白预设</button>
+              </div>
+
+              <div class="color-rows">
+                <div class="color-item">
+                  <div class="color-meta">
+                    <strong>主图形颜色</strong>
+                    <span>悬浮准星、圆环内圈与中心点主色</span>
+                  </div>
+                  <div class="color-controls">
+                    <input type="color" id="picker-primary" value="#ffffff" />
+                    <div class="alpha-wrap">
+                      <span>不透明度</span>
+                      <input type="range" id="alpha-primary" min="0" max="255" step="1" value="255" />
+                    </div>
+                    <input type="text" id="hex-primary" class="hex-input" value="#FFFFFFFF" maxlength="9" />
+                  </div>
+                </div>
+
+                <div class="color-item">
+                  <div class="color-meta">
+                    <strong>外轮廓描边</strong>
+                    <span>高对比度背景保护描边</span>
+                  </div>
+                  <div class="color-controls">
+                    <input type="color" id="picker-outline" value="#0d0d0d" />
+                    <div class="alpha-wrap">
+                      <span>不透明度</span>
+                      <input type="range" id="alpha-outline" min="0" max="255" step="1" value="242" />
+                    </div>
+                    <input type="text" id="hex-outline" class="hex-input" value="#0D0D0DF2" maxlength="9" />
+                  </div>
+                </div>
+
+                <div class="color-item">
+                  <div class="color-meta">
+                    <strong>笔尖接触高亮</strong>
+                    <span>笔尖落在数位板表面时的指示点颜色</span>
+                  </div>
+                  <div class="color-controls">
+                    <input type="color" id="picker-contact" value="#00e6ff" />
+                    <div class="alpha-wrap">
+                      <span>不透明度</span>
+                      <input type="range" id="alpha-contact" min="0" max="255" step="1" value="255" />
+                    </div>
+                    <input type="text" id="hex-contact" class="hex-input" value="#00E6FFFF" maxlength="9" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 响应时间 -->
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>响应时间与延时</h2>
+                  <p class="card-desc">控制笔尖离开感应区后的隐藏时机</p>
+                </div>
+              </div>
+
+              <div class="sliders-grid">
+                <div class="slider-item">
+                  <div class="slider-top">
+                    <label for="cfg-hover-timeout">悬浮消失延时</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-hover-timeout" min="20" max="2000" step="10" value="150" />
+                      <span>毫秒</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-hover-timeout" min="20" max="2000" step="10" value="150" />
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-top">
+                    <label for="cfg-mouse-timeout">鼠标避让延时</label>
+                    <div class="num-unit">
+                      <input type="number" id="num-mouse-timeout" min="10" max="2000" step="10" value="100" />
+                      <span>毫秒</span>
+                    </div>
+                  </div>
+                  <input type="range" id="cfg-mouse-timeout" min="10" max="2000" step="10" value="100" />
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!-- 标签页 2：硬件看板与电源管理 -->
+      <div id="tab-power" class="tab-panel">
+        <div class="two-col-layout">
+          <div class="col-stack">
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>数位板实时状态</h2>
+                  <p class="card-desc">实时探测数位板硬件连接与内核电源参数</p>
+                </div>
+                <button type="button" id="btn-probe-hw" class="btn btn-tonal btn-sm">重新探测</button>
+              </div>
+
+              <div class="kv-table">
+                <div class="kv-row">
+                  <span class="kv-key">后台服务进程</span>
+                  <span class="kv-val" id="hw-daemon-detail">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">数位板厂商与产品</span>
+                  <span class="kv-val" id="hw-target-vidpid">256c : 0064</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">硬件设备路径</span>
+                  <span class="kv-val" id="hw-usb-path">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">设备识别名称</span>
+                  <span class="kv-val" id="hw-usb-product">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">设备电源控制</span>
+                  <span class="kv-val" id="hw-dev-power-control">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">自动休眠延时</span>
+                  <span class="kv-val" id="hw-dev-autosuspend">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">全局休眠开关</span>
+                  <span class="kv-val" id="hw-usbcore-autosuspend">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">供电锁定开关</span>
+                  <span class="kv-val" id="hw-otg-switch">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">手写笔输入节点</span>
+                  <span class="kv-val" id="hw-evdev-nodes">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">驱动配置状态</span>
+                  <span class="kv-val" id="hw-idc-status">检测中</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-key">屏幕物理分辨率</span>
+                  <span class="kv-val" id="hw-viewport">检测中</span>
+                </div>
+              </div>
+
+              <div class="action-bar-row">
+                <button type="button" id="btn-daemon-toggle" class="btn btn-tonal">启停后台服务</button>
+                <button type="button" id="btn-daemon-restart" class="btn btn-tonal">重启后台服务</button>
+                <button type="button" id="btn-usb-rebind" class="btn btn-tonal">重新连接数位板</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="col-stack">
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>电源与供电保持策略</h2>
+                  <p class="card-desc">解决无源电磁笔因接口自动挂起导致的断电失效问题</p>
+                </div>
+              </div>
+
+              <div class="switch-list">
+                <label class="switch-row" for="cfg-disable-usbcore">
+                  <div class="switch-info">
+                    <strong>禁用全局自动休眠</strong>
+                    <span>禁止系统挂起外接输入设备接口</span>
+                  </div>
+                  <input type="checkbox" id="cfg-disable-usbcore" class="toggle-input" checked />
+                  <span class="toggle-track"></span>
+                </label>
+
+                <label class="switch-row" for="cfg-enforce-otg">
+                  <div class="switch-info">
+                    <strong>保持接口持续供电</strong>
+                    <span>锁定外接供电开关，防止超时断电</span>
+                  </div>
+                  <input type="checkbox" id="cfg-enforce-otg" class="toggle-input" checked />
+                  <span class="toggle-track"></span>
+                </label>
+
+                <label class="switch-row" for="cfg-force-dev-on">
+                  <div class="switch-info">
+                    <strong>保持数位板设备常开</strong>
+                    <span>对匹配识别码的数位板锁定供电并开启唤醒支持</span>
+                  </div>
+                  <input type="checkbox" id="cfg-force-dev-on" class="toggle-input" checked />
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="form-group">
+                <div class="slider-top">
+                  <label class="group-label">数位板设备识别码</label>
+                  <button type="button" id="btn-detect-vidpid" class="btn btn-tonal btn-sm">从已连接设备列表中选择</button>
+                </div>
+                <p class="card-desc">默认适配常见型号数位板。修改后服务将为新设备执行供电锁定与光标映射。</p>
+
+                <div class="vidpid-grid">
+                  <div class="input-field">
+                    <label for="cfg-usb-vid">厂商代码</label>
+                    <input type="text" id="cfg-usb-vid" value="256c" maxlength="6" placeholder="256c" />
+                  </div>
+                  <div class="input-field">
+                    <label for="cfg-usb-pid">产品代码</label>
+                    <input type="text" id="cfg-usb-pid" value="0064" maxlength="6" placeholder="0064" />
+                  </div>
+                </div>
+
+                <div id="usb-candidates-box" class="candidates-box hidden"></div>
+              </div>
+
+              <div class="action-bar-row">
+                <button type="button" id="btn-apply-power-now" class="btn btn-primary">应用电源策略</button>
+                <button type="button" id="btn-reset-vidpid" class="btn btn-tonal">恢复默认识别码</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!-- 标签页 3：配置文件与运行日志 -->
+      <div id="tab-advanced" class="tab-panel">
+        <div class="two-col-layout">
+          <div class="col-stack">
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>当前配置文件内容</h2>
+                  <p class="card-desc">保存在模块安装目录下的纯文本配置项</p>
+                </div>
+                <div class="inline-btns">
+                  <button type="button" id="btn-reload-conf" class="btn btn-tonal btn-sm">从磁盘重新载入</button>
+                  <button type="button" id="btn-reset-defaults" class="btn btn-danger btn-sm">恢复出厂配置</button>
+                </div>
+              </div>
+              <pre id="raw-config-preview" class="code-block"></pre>
+            </section>
+          </div>
+
+          <div class="col-stack">
+            <section class="card">
+              <div class="card-header">
+                <div>
+                  <h2>操作与服务日志</h2>
+                  <p class="card-desc">界面操作与底层服务运行记录</p>
+                </div>
+                <button type="button" id="btn-clear-log" class="btn btn-tonal btn-sm">清空日志</button>
+              </div>
+              <pre id="diag-log-box" class="code-block log-block"></pre>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部常驻操作栏 -->
+    <footer class="bottom-bar">
+      <div class="bottom-status">
+        <span id="footer-msg">就绪：修改参数可即时预览，保存后自动同步至设备</span>
+      </div>
+      <div class="bottom-actions">
+        <button type="button" id="btn-reset-bottom" class="btn btn-tonal">取消修改</button>
+        <button type="button" id="btn-save-bottom" class="btn btn-primary">保存配置</button>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+  <script src="./js/bridge.js"></script>
+  <script src="./js/config.js"></script>
+  <script src="./js/preview.js"></script>
+  <script src="./js/hardware.js"></script>
+  <script src="./js/main.js"></script>
+</body>
+</html>

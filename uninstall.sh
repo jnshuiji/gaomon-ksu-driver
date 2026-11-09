@@ -4,8 +4,9 @@
 # Executed by KernelSU / Magisk during module removal.
 #
 
-# Stop running PenCursor daemon
-pkill -x "pencursord" 2>/dev/null || true
+# Stop running PenCursor daemon and supervisor
+pkill -9 -x "pencursor" 2>/dev/null || true
+pkill -9 -f "service.sh" 2>/dev/null || true
 
 # Clean up fallback IDC files deployed in /data/system/devices/idc
 IDC_DATA_DIR="/data/system/devices/idc"

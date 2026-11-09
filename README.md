@@ -98,6 +98,7 @@ Key parameter mappings:
 - **Dual Pre-Rendered `64x64` `SurfaceControl` Sprite Layers**: Pre-rasterizes anti-aliased `Hover` (`Crosshair + Circle`) and `Contact` (`ContactDot`) vector sprites once at startup via Linebender `kurbo`, `peniko`, and `vello_cpu`. Runtime updates execute zero pixel copies, submitting only asynchronous (`oneWay`) `SurfaceComposerClient::Transaction::setPosition` updates.
 - **Event-Driven `evdev` Coalescing (`epoll` + `inotify` + `timerfd`)**: Passively monitors `/dev/input/event*` without `EVIOCGRAB`, coalescing intermediate `SYN_REPORT` packets per wakeup and sleeping with `0.0%` CPU/GPU overhead when the stylus is out of range.
 - **Event-Driven USB Power Governor**: Automatically enforces `usbcore.autosuspend = -1`, `power/control = on`, `power/autosuspend_delay_ms = -1`, and OTG persistence (`persist.sys.oplus.otg_support = 1`) on startup and USB hotplug events.
+- **KernelSU WebUI & `inotify` Live Sprite Hot-Reload**: Provides a zero-dependency WebUI (`webroot/`) inside KernelSU Manager featuring a real-time hardware telemetry dashboard, `64x64` `4x` + `1:1` interactive HTML5 Canvas cursor preview, color palette presets, and USB/OTG power controls. Saving configuration to `/data/adb/modules/gaomon_ksu_driver/config.conf` triggers `inotify` inside `pencursor`, re-rasterizing and uploading new `SurfaceControl` sprites in-place without restarting the daemon.
 
 ---
 
@@ -107,12 +108,17 @@ Key parameter mappings:
 gaomon-ksu-driver/
 ├── module.prop                  # KernelSU module metadata descriptor
 ├── system.prop                  # System properties loaded during early init
+├── config.conf                  # Default key=value runtime configuration
 ├── post-fs-data.sh              # Early-stage initialization script
 ├── service.sh                   # Late-start service launching PenCursor daemon
 ├── customize.sh                 # KernelSU / Magisk installer script
 ├── uninstall.sh                 # Module cleanup script for clean uninstallation
 ├── build.sh                     # Automated Rust build & flashable ZIP packaging script
 ├── reload.sh                    # Live hot-reload script (zero reboot required)
+├── webroot/                     # KernelSU WebUI configuration center
+│   ├── index.html               # WebUI layout (Cursor Visuals, Hardware & Power, Diagnostics)
+│   ├── css/                     # Modular stylesheets (base, layout, components)
+│   └── js/                      # Modular JavaScript (bridge, config, preview, hardware, main)
 ├── pencursor/                   # Cross-platform Rust 2024 workspace submodule
 ├── system/
 │   └── usr/

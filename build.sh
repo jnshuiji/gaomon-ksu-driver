@@ -42,6 +42,7 @@ output_zip = os.path.join("${OUTPUT_DIR}", "${PACKAGE_NAME}")
 files_to_pack = [
     ("module.prop", 0o644),
     ("system.prop", 0o644),
+    ("config.conf", 0o644),
     ("service.sh", 0o755),
     ("post-fs-data.sh", 0o755),
     ("customize.sh", 0o755),
@@ -64,12 +65,15 @@ with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 
     write_with_mode(zf, daemon_bin_path, "bin/pencursor", 0o755)
 
-    system_dir = os.path.join(script_dir, "system")
-    for root, dirs, files in os.walk(system_dir):
-        for f in files:
-            full_path = os.path.join(root, f)
-            arcname = os.path.relpath(full_path, script_dir)
-            write_with_mode(zf, full_path, arcname, 0o644)
+    for folder in ("system", "webroot"):
+        target_dir = os.path.join(script_dir, folder)
+        if not os.path.isdir(target_dir):
+            continue
+        for root, dirs, files in os.walk(target_dir):
+            for f in files:
+                full_path = os.path.join(root, f)
+                arcname = os.path.relpath(full_path, script_dir)
+                write_with_mode(zf, full_path, arcname, 0o644)
 
 print("[+] KernelSU Module 打包完成:")
 print(f"    {output_zip}")

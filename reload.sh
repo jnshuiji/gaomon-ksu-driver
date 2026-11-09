@@ -15,7 +15,7 @@ TARGET_MODULE_DIR="/data/adb/modules/gaomon_ksu_driver"
 TARGET_IDC_DIR="/data/system/devices/idc"
 TMP_DIR="/data/local/tmp/gaomon_reload"
 
-echo "[*] 正在编译 PenCursor Android Daemon (${DAEMON_TARGET_TRIPLE})..."
+echo "[*] 正在编译 PenCursor Android Daemon (${DAEMON_TARGET_TRIPLE})...."
 (
     cd "${PENCURSOR_DIR}"
     cargo build --release --target "${DAEMON_TARGET_TRIPLE}"
@@ -23,16 +23,18 @@ echo "[*] 正在编译 PenCursor Android Daemon (${DAEMON_TARGET_TRIPLE})..."
 
 echo "[*] 正在推送文件至设备 Staging 目录..."
 
-adb shell "rm -rf '${TMP_DIR}' && mkdir -p '${TMP_DIR}/bin' '${TMP_DIR}/system/usr/idc'"
+adb shell "rm -rf '${TMP_DIR}' && mkdir -p '${TMP_DIR}/bin' '${TMP_DIR}/system/usr/idc' '${TMP_DIR}/webroot'"
 
 # Push all module files and compiled daemon binary to staging area
 adb push "${SCRIPT_DIR}/module.prop" "${TMP_DIR}/" >/dev/null
 adb push "${SCRIPT_DIR}/system.prop" "${TMP_DIR}/" >/dev/null
+adb push "${SCRIPT_DIR}/config.conf" "${TMP_DIR}/" >/dev/null
 adb push "${SCRIPT_DIR}/service.sh" "${TMP_DIR}/" >/dev/null
 adb push "${SCRIPT_DIR}/post-fs-data.sh" "${TMP_DIR}/" >/dev/null
 adb push "${SCRIPT_DIR}/customize.sh" "${TMP_DIR}/" >/dev/null
 adb push "${SCRIPT_DIR}/uninstall.sh" "${TMP_DIR}/" >/dev/null
 adb push "${DAEMON_BIN_PATH}" "${TMP_DIR}/bin/pencursor" >/dev/null
+adb push "${SCRIPT_DIR}/webroot/." "${TMP_DIR}/webroot/" >/dev/null
 
 for idc in "${SCRIPT_DIR}/system/usr/idc"/*.idc; do
     fname="$(basename "$idc")"
@@ -48,25 +50,38 @@ TMP_DIR="/data/local/tmp/gaomon_reload"
 TARGET_MODULE_DIR="/data/adb/modules/gaomon_ksu_driver"
 TARGET_IDC_DIR="/data/system/devices/idc"
 
-echo "[+] 正在更新 KernelSU Module 与 IDC 文件..."
+echo "[+] 正在更新 KernelSU Module、WebUI 与 IDC 文件..."
 mkdir -p "${TARGET_MODULE_DIR}/bin"
 mkdir -p "${TARGET_MODULE_DIR}/system/usr/idc"
 mkdir -p "${TARGET_IDC_DIR}"
 
-# Stop running daemon before replacing binary
-pkill -x "pencursord" 2>/dev/null || true
-pkill -f "service.sh" 2>/dev/null || true
+# Terminate existing daemon and service instances before updating files
+pkill -9 -x "pencursor" 2>/dev/null || true
+pkill -9 -f "service.sh" 2>/dev/null || true
+
+# Remove old module path if present
+rm -rf /data/adb/modules/gaomon_tablet_fix 2>/dev/null || true
 
 cp -f "${TMP_DIR}/module.prop" "${TARGET_MODULE_DIR}/"
 cp -f "${TMP_DIR}/system.prop" "${TARGET_MODULE_DIR}/"
+if [ ! -f "${TARGET_MODULE_DIR}/config.conf" ]; then
+    cp -f "${TMP_DIR}/config.conf" "${TARGET_MODULE_DIR}/config.conf"
+    chmod 0644 "${TARGET_MODULE_DIR}/config.conf"
+fi
 cp -f "${TMP_DIR}/service.sh" "${TARGET_MODULE_DIR}/"
 cp -f "${TMP_DIR}/post-fs-data.sh" "${TARGET_MODULE_DIR}/"
 cp -f "${TMP_DIR}/customize.sh" "${TARGET_MODULE_DIR}/"
 cp -f "${TMP_DIR}/uninstall.sh" "${TARGET_MODULE_DIR}/"
 cp -f "${TMP_DIR}/bin/pencursor" "${TARGET_MODULE_DIR}/bin/pencursor"
 
+rm -rf "${TARGET_MODULE_DIR}/webroot"
+mkdir -p "${TARGET_MODULE_DIR}/webroot"
+cp -rf "${TMP_DIR}/webroot/." "${TARGET_MODULE_DIR}/webroot/"
+
 chmod 0755 "${TARGET_MODULE_DIR}"/*.sh
 chmod 0755 "${TARGET_MODULE_DIR}/bin/pencursor"
+chmod -R 0755 "${TARGET_MODULE_DIR}/webroot"
+find "${TARGET_MODULE_DIR}/webroot" -type f -exec chmod 0644 {} + 2>/dev/null || true
 
 # Copy updated IDC files to module directory and active fallback path
 for idc in "${TMP_DIR}/system/usr/idc"/*.idc; do

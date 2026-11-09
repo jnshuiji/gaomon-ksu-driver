@@ -26,7 +26,15 @@ for idc_file in "$MODDIR"/system/usr/idc/*.idc; do
     fi
 done
 
-# Pre-disable USB core autosuspend parameter if sysfs is accessible
-if [ -w "/sys/module/usbcore/parameters/autosuspend" ]; then
+# Pre-disable USB core autosuspend parameter if sysfs is accessible and enabled in config.conf
+CONF_FILE="$MODDIR/config.conf"
+DISABLE_AUTOSUSPEND=1
+if [ -f "$CONF_FILE" ]; then
+    if grep -qE '^[[:space:]]*disable_usbcore_autosuspend[[:space:]]*=[[:space:]]*(0|false|no|off)[[:space:]]*$' "$CONF_FILE" 2>/dev/null; then
+        DISABLE_AUTOSUSPEND=0
+    fi
+fi
+
+if [ "$DISABLE_AUTOSUSPEND" = "1" ] && [ -w "/sys/module/usbcore/parameters/autosuspend" ]; then
     echo -1 > /sys/module/usbcore/parameters/autosuspend 2>/dev/null
 fi
