@@ -1,0 +1,6 @@
+id=gaomon_ksu_driver
+name=Gaomon Drawing Tablet Driver & Power Manager
+version=v1.0.0
+versionCode=100
+author=pochita
+description=Provides dedicated IDC driver mapping and runtime USB power management for Gaomon drawing tablets (Vendor 256c, Product 0064).

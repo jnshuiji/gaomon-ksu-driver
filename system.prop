@@ -1,0 +1,2 @@
+# System properties for USB OTG power persistence
+persist.sys.oplus.otg_support=1
