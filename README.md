@@ -75,12 +75,12 @@ Drawing tablets are physically stationary desktop peripherals with a fixed coord
     +----------------------------------+----------------------------------+
     |                                                                     |
     v                                                                     v
-[Dedicated IDC Driver]                                        [USB Power Governor]
-- System Overlay: /system/usr/idc/                            - service.sh background daemon
-- Fallback: /data/system/devices/idc/                         - Disable usbcore.autosuspend (-1)
-- touch.deviceType = touchScreen                              - Force power/control = on
-- touch.orientationAware = 0 (Fixed mapping)                  - Hotplug polling loop (3s interval)
-- 14-bit physical pressure calibration                        - Enforce persist.sys.oplus.otg_support=1
+[Dedicated IDC Driver]                                     [PenCursor KSU Daemon (Rust)]
+- System Overlay: /system/usr/idc/                         - Event-driven epoll + inotify + timerfd
+- Fallback: /data/system/devices/idc/                      - Dual 64x64 SurfaceFlinger Sprite Layers
+- touch.deviceType = touchScreen                           - Linebender kurbo/peniko/vello_cpu engine
+- touch.orientationAware = 0 (Fixed mapping)               - Zero-copy oneWay Transaction::setPosition
+- 14-bit physical pressure calibration                     - Event-driven sysfs USB Power Governor
 ```
 
 ### 1. Dedicated Input Device Configuration (IDC)
@@ -94,11 +94,10 @@ Key parameter mappings:
 - `touch.orientationAware = 0`: Disables display-dependent orientation transforms. The digitizer coordinate axes remain anchored to the native portrait frame, ensuring consistent and correct mapping regardless of host display orientation.
 - `touch.pressure.calibration = physical`: Scales the raw 14-bit sensor resolution (`0 - 16383`) linearly into normalized Android `MotionEvent.getPressure()` units.
 
-### 2. Runtime USB Power Management & Autosuspend Blocker
-- Globally disables USB core autosuspend delay via `/sys/module/usbcore/parameters/autosuspend`.
-- Sets sysfs runtime power state to persistent active (`power/control = on`, `power/autosuspend_delay_ms = -1`) for matching devices (`256c:0064`).
-- Implements an asynchronous hotplug polling daemon in `service.sh` to ensure power overrides are applied immediately upon re-plugging without requiring system reboots.
-- Enforces OTG bus persistence via `system.prop` and Android settings database (`persist.sys.oplus.otg_support = 1`).
+### 2. PenCursor SurfaceFlinger Overlay & Event-Driven USB Power Daemon
+- **Dual Pre-Rendered `64x64` `SurfaceControl` Sprite Layers**: Pre-rasterizes anti-aliased `Hover` (`Crosshair + Circle`) and `Contact` (`ContactDot`) vector sprites once at startup via Linebender `kurbo`, `peniko`, and `vello_cpu`. Runtime updates execute zero pixel copies, submitting only asynchronous (`oneWay`) `SurfaceComposerClient::Transaction::setPosition` updates.
+- **Event-Driven `evdev` Coalescing (`epoll` + `inotify` + `timerfd`)**: Passively monitors `/dev/input/event*` without `EVIOCGRAB`, coalescing intermediate `SYN_REPORT` packets per wakeup and sleeping with `0.0%` CPU/GPU overhead when the stylus is out of range.
+- **Event-Driven USB Power Governor**: Automatically enforces `usbcore.autosuspend = -1`, `power/control = on`, `power/autosuspend_delay_ms = -1`, and OTG persistence (`persist.sys.oplus.otg_support = 1`) on startup and USB hotplug events.
 
 ---
 
@@ -109,11 +108,12 @@ gaomon-ksu-driver/
 ├── module.prop                  # KernelSU module metadata descriptor
 ├── system.prop                  # System properties loaded during early init
 ├── post-fs-data.sh              # Early-stage initialization script
-├── service.sh                   # Late-start service daemon & hotplug watcher
+├── service.sh                   # Late-start service launching PenCursor daemon
 ├── customize.sh                 # KernelSU / Magisk installer script
 ├── uninstall.sh                 # Module cleanup script for clean uninstallation
-├── build.sh                     # Automated flashable ZIP packaging script
+├── build.sh                     # Automated Rust build & flashable ZIP packaging script
 ├── reload.sh                    # Live hot-reload script (zero reboot required)
+├── pencursor/                   # Cross-platform Rust 2024 workspace submodule
 ├── system/
 │   └── usr/
 │       └── idc/                 # Magisk/KSU overlayfs target for IDC drivers

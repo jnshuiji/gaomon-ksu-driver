@@ -1,6 +1,6 @@
 id=gaomon_ksu_driver
-name=Gaomon Drawing Tablet Driver & Power Manager
-version=v1.0.0
-versionCode=100
+name=Gaomon Drawing Tablet Driver, Power Manager & PenCursor Daemon
+version=v1.1.0
+versionCode=110
 author=pochita
-description=Provides dedicated IDC driver mapping and runtime USB power management for Gaomon drawing tablets (Vendor 256c, Product 0064).
+description=Provides dedicated IDC driver mapping, event-driven USB power management, and hardware-accelerated PenCursor SurfaceFlinger overlay daemon for Gaomon drawing tablets (256c:0064).
