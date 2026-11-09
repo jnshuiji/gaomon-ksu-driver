@@ -1,0 +1,3 @@
+[submodule "pencursor"]
+	path = pencursor
+	url = https://github.com/jnshuiji/pencursor.git
