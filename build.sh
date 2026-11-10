@@ -70,7 +70,10 @@ with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         if not os.path.isdir(target_dir):
             continue
         for root, dirs, files in os.walk(target_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
             for f in files:
+                if f.startswith(".") or f.endswith((".tmp", ".swp", "~")):
+                    continue
                 full_path = os.path.join(root, f)
                 arcname = os.path.relpath(full_path, script_dir)
                 write_with_mode(zf, full_path, arcname, 0o644)

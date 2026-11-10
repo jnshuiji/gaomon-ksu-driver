@@ -3,9 +3,6 @@ out/
 *.zip
 *.tar.gz
 
-# Device staging runner
-.device_apply.sh
-
 # Temporary and editor files
 *.tmp
 *~

@@ -6,16 +6,25 @@
 
 ui_print "- 正在安装 Gaomon Tablet IDC Driver、PenCursor Daemon 与 KernelSU WebUI"
 
-EXISTING_CONF="/data/adb/modules/gaomon_ksu_driver/config.conf"
-OLD_MODULE_DIR="/data/adb/modules/gaomon_tablet_fix"
+EXISTING_MODULE_DIR="/data/adb/modules/gaomon_ksu_driver"
+EXISTING_CONF="$EXISTING_MODULE_DIR/config.conf"
+IDC_DATA_DIR="/data/system/devices/idc"
 
-# Clean old module directory if migrating
-if [ -d "$OLD_MODULE_DIR" ]; then
-    ui_print "- 检测到旧版模块目录 gaomon_tablet_fix，正在清理迁移"
-    if [ ! -f "$EXISTING_CONF" ] && [ -f "$OLD_MODULE_DIR/config.conf" ]; then
-        cp -f "$OLD_MODULE_DIR/config.conf" "$MODPATH/config.conf"
-    fi
-    rm -rf "$OLD_MODULE_DIR"
+# Clean up any leftover hot-reload staging files or temp config files
+rm -rf /data/local/tmp/gaomon_reload 2>/dev/null
+rm -f /data/local/tmp/device_apply.sh 2>/dev/null
+rm -f "$MODPATH/config.conf.tmp" 2>/dev/null
+
+# Clean up obsolete fallback IDC files from an earlier version if removed in this package
+if [ -d "$EXISTING_MODULE_DIR/system/usr/idc" ] && [ -d "$IDC_DATA_DIR" ]; then
+    for old_idc in "$EXISTING_MODULE_DIR"/system/usr/idc/*.idc; do
+        if [ -f "$old_idc" ]; then
+            fname="${old_idc##*/}"
+            if [ ! -f "$MODPATH/system/usr/idc/$fname" ]; then
+                rm -f "$IDC_DATA_DIR/$fname"
+            fi
+        fi
+    done
 fi
 
 # Preserve existing user configuration across module upgrades

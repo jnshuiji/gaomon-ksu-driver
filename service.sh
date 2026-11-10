@@ -40,7 +40,11 @@ pkill -9 -x "pencursor" 2>/dev/null || true
 if [ -x "$DAEMON_BIN" ]; then
     log_info "PenCursor KernelSU daemon supervisor started (config: $CONFIG_FILE)."
     while true; do
-        if is_cfg_disabled "daemon_enabled"; then
+        if [ -f "$MODDIR/remove" ]; then
+            log_info "Module marked for removal. Stopping PenCursor supervisor."
+            break
+        fi
+        if [ -f "$MODDIR/disable" ] || is_cfg_disabled "daemon_enabled"; then
             sleep 5
             continue
         fi

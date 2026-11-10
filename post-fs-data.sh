@@ -6,6 +6,9 @@
 
 MODDIR="${0%/*}"
 
+# Clean up any interrupted WebUI temporary config file from prior sessions
+rm -f "$MODDIR/config.conf.tmp" 2>/dev/null
+
 # Ensure fallback IDC directory exists in /data/system/devices/idc
 # Android EventHub checks this directory in addition to /system/usr/idc.
 IDC_DATA_DIR="/data/system/devices/idc"
